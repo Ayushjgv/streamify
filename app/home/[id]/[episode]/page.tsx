@@ -3,7 +3,10 @@
 import { useParams } from "next/navigation";
 
 const page = () => {
-  const { id, episode } = useParams();
+  const params = useParams<{ id?: string; episode?: string }>();
+
+  const id = params?.id;
+  const episode = params?.episode;
 
   return (
     <div className="w-full h-screen flex items-center justify-center">
