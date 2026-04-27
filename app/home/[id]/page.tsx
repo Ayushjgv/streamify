@@ -19,7 +19,9 @@ type Anime = {
 };
 
 const Page = () => {
-  const { id } = useParams<{ id: string }>(); // ✅ correct typing
+  const params = useParams<{ id: string }>();
+
+  const id = params?.id; // ✅ correct typing
 
   const [animeDetails, setAnimeDetails] = useState<Anime | null>(null);
 
