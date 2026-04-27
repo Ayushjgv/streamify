@@ -2,7 +2,20 @@
 import React, { use } from 'react';
 import { useRouter } from "next/navigation";
 
-const Card = (props) => {
+type CardProps = {
+  id: number | string;
+  title?: {
+    romaji?: string;
+    english?: string;
+  };
+  coverImage?: {
+    large: string;
+  };
+  averageScore?: number;
+  episode?: number;
+};
+
+const Card = (props: CardProps) => {
     const router = useRouter();
 
     console.log(props);

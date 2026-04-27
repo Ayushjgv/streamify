@@ -3,7 +3,20 @@ import React, { use } from 'react';
 import { useRouter } from "next/navigation";
 import {useParams} from "next/navigation";
 
-const EpisodeCard = (props) => {
+type CardProps = {
+  id: number | string;
+  title?: {
+    romaji?: string;
+    english?: string;
+  };
+  coverImage?: {
+    large: string;
+  };
+  averageScore?: number;
+  episode?: number;
+};
+
+const EpisodeCard = (props: CardProps) => {
     const router = useRouter();
     const params = useParams();
     const id = params.id;
