@@ -1,30 +1,27 @@
 "use client";
+
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import EpisodeCard from "@/components/EpisodeCard";
 import axios from "axios";
 
-const page = () => {
-  type Anime = {
-    id: number;
-    title: {
-      romaji?: string;
-      english?: string;
-    };
-    coverImage: {
-      large: string;
-    };
-    episodes?: number;
-    averageScore?: number;
-    nextAiringEpisode?: {
-      episode: number;
-    };
+type Anime = {
+  id: number;
+  title: {
+    romaji?: string;
+    english?: string;
   };
+  coverImage: {
+    large: string;
+  };
+  episodes?: number;
+  averageScore?: number;
+};
 
-  const params: { id: string } | null | undefined = useParams<{ id: string }>();
-  const id = params?.id;
-  const [Episodes, setEpisodes] = useState<number | null>(null);
-  const [AnimeDetails, setAnimeDetails] = useState<Anime | null>(null);
+const Page = () => {
+  const { id } = useParams<{ id: string }>(); // ✅ correct typing
+
+  const [animeDetails, setAnimeDetails] = useState<Anime | null>(null);
 
   const FETCH_QUERY = `
     query ($id: Int) {
@@ -38,49 +35,50 @@ const page = () => {
         coverImage {
           large
         }
+        averageScore
       }
     }
   `;
 
-  const fetchEpisodes = async () => {
+  const fetchAnime = async () => {
     const res = await axios.post("https://graphql.anilist.co", {
       query: FETCH_QUERY,
       variables: {
-        id: parseInt(id || "0"),
+        id: Number(id), // ✅ safer than parseInt
       },
     });
-    setEpisodes(res.data.data.Media.episodes);
-    console.log(res.data.data.Media);
-    return res.data.data.Media;
+
+    setAnimeDetails(res.data.data.Media);
   };
 
   useEffect(() => {
-    if (id) {
-      fetchEpisodes().then((data) => {
-        setAnimeDetails(data ?? null);
-        console.log(data);
-      });
-    }
+    if (!id) return;
+
+    const load = async () => {
+      await fetchAnime();
+    };
+
+    load();
   }, [id]);
 
   return (
-    <div className="text-white bg-black w-full h-screen flex items-center justify-center overflow-auto">
+    <div className="text-white bg-black w-full min-h-screen flex items-center justify-center overflow-auto">
       <div className="flex overflow-x-auto gap-4 p-4">
-        {new Array(Episodes || 0).fill(0).map((_, index) => (
-          <div key={index} className="flex shrink-0">
-            <EpisodeCard
-              id={AnimeDetails?.id || 0}
-              title={AnimeDetails?.title}
-              coverImage={AnimeDetails?.coverImage}
-              episode={index + 1}
-              episodes={Episodes}
-              averageScore={AnimeDetails?.averageScore}
-            />
-          </div>
-        ))}
+        {animeDetails &&
+          Array.from({ length: animeDetails.episodes || 0 }).map((_, index) => (
+            <div key={index} className="flex shrink-0">
+              <EpisodeCard
+                id={animeDetails.id} // ✅ always defined
+                title={animeDetails.title}
+                coverImage={animeDetails.coverImage}
+                episode={index + 1}
+                averageScore={animeDetails.averageScore}
+              />
+            </div>
+          ))}
       </div>
     </div>
   );
 };
 
-export default page;
+export default Page;

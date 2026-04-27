@@ -2,23 +2,30 @@
 
 import { useParams } from "next/navigation";
 
-const page = () => {
+const Page = () => {
   const params = useParams<{ id?: string; episode?: string }>();
 
   const id = params?.id;
   const episode = params?.episode;
 
+  // ✅ Guard: don’t render iframe until params exist
+  if (!id || !episode) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center text-white">
+        Loading...
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-screen flex items-center justify-center">
+    <div className="w-full h-screen flex items-center justify-center bg-black">
       <iframe
         src={`https://megaplay.buzz/stream/ani/${id}/${episode}/dub`}
-        width="800"
-        height="450"
+        className="w-[90%] h-[80%] rounded-lg shadow-lg"
         allowFullScreen
-        className="rounded-lg shadow-lg"
-      ></iframe>
+      />
     </div>
   );
 };
 
-export default page;
+export default Page;

@@ -21,9 +21,10 @@ const EpisodeCard = (props: CardProps) => {
     const params = useParams();
     const id = params.id;
 
+
     console.log(props);
     return (
-        <div key={props.id} className='flex flex-col items-center justify-center m-4 w-fit cursor-pointer' onClick={() => router.push(`/home/${id}/${props.episodes}`)}>
+        <div key={props.id} className='flex flex-col items-center justify-center m-4 w-fit cursor-pointer' onClick={() => router.push(`/home/${id}/${props.episode}`)}>
             <h2>{props.title.english}</h2>
             <img src={props.coverImage.large} alt="" className='w-64 h-96 object-cover' />
             <p>Episode {props.episode}</p>
