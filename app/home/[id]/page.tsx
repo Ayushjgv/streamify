@@ -69,7 +69,7 @@ const page = () => {
         {new Array(Episodes || 0).fill(0).map((_, index) => (
           <div key={index} className="flex shrink-0">
             <EpisodeCard
-              id={id}
+              id={AnimeDetails?.id || 0}
               title={AnimeDetails?.title}
               coverImage={AnimeDetails?.coverImage}
               episode={index + 1}
