@@ -20,107 +20,55 @@ type Anime = {
   };
 };
 
-const QUERIES = {
-  TOP_LIST: `
-    query {
-    Page(perPage: 100) {
-      media(sort: SCORE_DESC, type: ANIME) {
-        id
-        episodes
-        title {
-          romaji
-          english
-        }
-        averageScore
-        coverImage {
-          large
-        }
-      }
-    }
-  }
-  `,
-  TRENDING_LIST: `
-    query {
-    Page(perPage: 100) {
-      media(sort: TRENDING_DESC, type: ANIME) {
-        id
-        title {
-          romaji
-          english
-        }
-        coverImage {
-          large
-        }
-        episodes
-      }
-    }
-  }
-  `,
-  POPULAR_LIST: `
-    query {
-    Page(perPage: 100) {
-      media(sort: POPULARITY_DESC, type: ANIME) {
-        id
-        title {
-          romaji
-          english
-        }
-        coverImage {
-          large
-        }
-      }
-    }
-  }
-  `,
-  AIRING_LIST: `
-    query {
-    Page(perPage: 100) {
-      media(status: RELEASING, type: ANIME) {
-        id
-        title {
-          romaji
-          english
-        }
-        nextAiringEpisode {
-          episode
-        }
-        coverImage {
-          large
-        }
-      }
-    }
-  }
-  `,
-  UPCOMING_LIST: `
-    query {
-    Page(perPage: 100) {
-      media(status: NOT_YET_RELEASED, type: ANIME) {
-        id
-        title {
-          romaji
-          english
-        }
-        coverImage {
-          large
-        }
-      }
-    }
-  }
-  `,
-} as const;
+type HomeFeed = {
+  trending: { media: Anime[] };
+  top: { media: Anime[] };
+  airing: { media: Anime[] };
+  popular: { media: Anime[] };
+  upcoming: { media: Anime[] };
+};
 
-async function fetchAnime(
-  query: string,
-): Promise<{ data: { Page: { media: Anime[] } } }> {
-  const res = await fetch("https://graphql.anilist.co", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  });
+const HOME_CACHE_KEY = "streamer-home-feed-v1";
+const HOME_CACHE_TTL_MS = 1000 * 60 * 10;
 
-  return res.json();
+function readCache<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(key);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { expiresAt: number; data: T };
+
+    if (parsed.expiresAt < Date.now()) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    return parsed.data;
+  } catch {
+    window.localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function writeCache<T>(key: string, data: T, ttlMs: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      expiresAt: Date.now() + ttlMs,
+      data,
+    }),
+  );
 }
 
 function easeInOutCubic(progress: number) {
@@ -136,27 +84,48 @@ const Home = () => {
   const [PopularList, setPopularList] = useState<Anime[]>([]);
   const [TrendingList, setTrendingList] = useState<Anime[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const applyHomeFeed = (payload: HomeFeed) => {
+    setTrendingList(payload.trending?.media ?? []);
+    setTopList(payload.top?.media ?? []);
+    setAiringList(payload.airing?.media ?? []);
+    setPopularList(payload.popular?.media ?? []);
+    setUpcomingList(payload.upcoming?.media ?? []);
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadHome() {
+      const cachedFeed = readCache<HomeFeed>(HOME_CACHE_KEY);
+
+      if (cachedFeed && isMounted) {
+        applyHomeFeed(cachedFeed);
+        setIsLoading(false);
+      }
+
       try {
-        const [top, airing, upcoming, popular, trending] = await Promise.all([
-          fetchAnime(QUERIES.TOP_LIST),
-          fetchAnime(QUERIES.AIRING_LIST),
-          fetchAnime(QUERIES.UPCOMING_LIST),
-          fetchAnime(QUERIES.POPULAR_LIST),
-          fetchAnime(QUERIES.TRENDING_LIST),
-        ]);
+        const response = await fetch("/api/anilist/home");
+        const payload = (await response.json()) as HomeFeed & { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load home feed");
+        }
 
         if (!isMounted) return;
 
-        setTopList(top?.data?.Page?.media ?? []);
-        setAiringList(airing?.data?.Page?.media ?? []);
-        setUpcomingList(upcoming?.data?.Page?.media ?? []);
-        setPopularList(popular?.data?.Page?.media ?? []);
-        setTrendingList(trending?.data?.Page?.media ?? []);
+        applyHomeFeed(payload);
+        writeCache(HOME_CACHE_KEY, payload, HOME_CACHE_TTL_MS);
+        setLoadError(null);
+      } catch (error) {
+        if (!isMounted) return;
+
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "AniList is rate limiting requests right now.",
+        );
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -338,6 +307,11 @@ const Home = () => {
       </section>
 
       <section className="mx-auto max-w-7xl space-y-10 px-5 py-10 sm:px-8 lg:px-10 lg:py-12">
+        {loadError ? (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+            {loadError} Cached results will be used when available.
+          </div>
+        ) : null}
         {rows.map((row) => (
           <div
             key={row.title}

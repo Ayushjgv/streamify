@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import EpisodeCard from "@/components/EpisodeCard";
-import axios from "axios";
 
 type Anime = {
   id: number;
@@ -19,11 +18,54 @@ type Anime = {
   averageScore?: number;
 };
 
+const ANIME_CACHE_TTL_MS = 1000 * 60 * 30;
+
+function readAnimeCache<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(key);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { expiresAt: number; data: T };
+
+    if (parsed.expiresAt < Date.now()) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    return parsed.data;
+  } catch {
+    window.localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function writeAnimeCache<T>(key: string, data: T) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      expiresAt: Date.now() + ANIME_CACHE_TTL_MS,
+      data,
+    }),
+  );
+}
+
 const Page = () => {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
   const [animeDetails, setAnimeDetails] = useState<Anime | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const episodesList = Array.from(
     { length: animeDetails?.episodes ?? 0 },
     (_, index) => index + 1,
@@ -33,29 +75,31 @@ const Page = () => {
     if (!id) return;
 
     const load = async () => {
-      const res = await axios.post("https://graphql.anilist.co", {
-        query: `
-          query ($id: Int) {
-            Media(id: $id, type: ANIME) {
-              episodes
-              id
-              title {
-                romaji
-                english
-              }
-              coverImage {
-                large
-              }
-              averageScore
-            }
-          }
-        `,
-        variables: {
-          id: Number(id),
-        },
-      });
+      const cacheKey = `streamer-anime-${id}`;
+      const cachedAnime = readAnimeCache<Anime>(cacheKey);
 
-      setAnimeDetails(res.data.data.Media);
+      if (cachedAnime) {
+        setAnimeDetails(cachedAnime);
+      }
+
+      try {
+        const response = await fetch(`/api/anilist/anime/${id}`);
+        const payload = (await response.json()) as Anime & { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load anime details");
+        }
+
+        setAnimeDetails(payload);
+        writeAnimeCache(cacheKey, payload);
+        setLoadError(null);
+      } catch (error) {
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "AniList is rate limiting requests right now.",
+        );
+      }
     };
 
     void load();
@@ -119,6 +163,11 @@ const Page = () => {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10 lg:py-12">
+        {loadError ? (
+          <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+            {loadError} Cached series details will be used when available.
+          </div>
+        ) : null}
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/42">
